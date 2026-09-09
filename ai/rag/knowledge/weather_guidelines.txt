@@ -1,0 +1,255 @@
+WeatherGPT Decision Support Knowledge Base
+
+GENERAL PRINCIPLES
+
+WeatherGPT combines verified weather data with a deterministic Risk
+Engine and Decision Engine.
+
+The Risk Engine calculates weather impact levels using the available
+weather variables.
+
+The Decision Engine converts the calculated risk into an
+activity-specific decision.
+
+The calculated Risk Engine result and Decision Engine result are
+authoritative.
+
+Retrieved knowledge provides supporting context only. It must never
+override a calculated risk level or decision.
+
+RISK LEVELS
+
+Minimal risk:
+Weather-related impact is minimal. Normal precautions are generally
+recommended.
+
+Low risk:
+Weather-related impact is relatively low. Normal precautions are
+recommended.
+
+Moderate risk:
+Weather conditions may require additional precautions.
+
+High risk:
+Weather conditions may significantly affect outdoor activities.
+Depending on the activity, caution or postponement may be appropriate.
+
+Extreme risk:
+Weather conditions represent the highest risk category in the
+WeatherGPT decision model. Outdoor activities may need to be avoided
+according to the calculated decision.
+
+RUNNING
+
+Running is a strenuous outdoor activity.
+
+The Decision Engine should be treated as authoritative for running
+decisions.
+
+If the calculated decision is "proceed", the response may explain
+that the calculated weather risk is relatively low.
+
+If the calculated decision is "caution", the response should explain
+the relevant weather impacts and recommend appropriate precautions.
+
+If the calculated decision is "postpone", the response should explain
+that postponement is the calculated recommendation.
+
+If the calculated decision is "avoid", the response should explain
+that avoiding strenuous outdoor activity is the calculated
+recommendation.
+
+CYCLING
+
+Cycling is an outdoor physical activity that may be affected by heat,
+rain, and wind.
+
+The calculated Decision Engine result must be preserved.
+
+High wind or high precipitation impact may affect cycling conditions
+according to the WeatherGPT risk model.
+
+RUNNING, CYCLING, AND SPORTS
+
+Running, cycling, and outdoor sports can involve sustained physical
+activity.
+
+The language model must not independently change a calculated
+decision.
+
+For high or extreme calculated risk, the response should clearly
+communicate the calculated recommendation.
+
+WALKING
+
+Walking is generally less strenuous than running or outdoor sports,
+but weather conditions can still affect the activity.
+
+The Decision Engine determines whether the calculated recommendation
+is to proceed, use caution, or avoid the activity.
+
+TRAVEL
+
+Travel may be affected by precipitation and wind.
+
+High rain impact may increase weather-related travel concerns.
+
+High wind impact may increase weather-related travel concerns.
+
+The Decision Engine's calculated travel decision is authoritative.
+
+The language model must not independently declare travel safe or
+unsafe when a calculated decision is available.
+
+FARMING
+
+Farming and agricultural activities can be affected by temperature,
+precipitation, wind, and humidity.
+
+High precipitation may affect weather-sensitive agricultural
+activities.
+
+High wind may affect exposed agricultural activities.
+
+The Decision Engine's calculated farming recommendation must be
+preserved.
+
+HEAT
+
+Temperature is one of the weather variables evaluated by the
+WeatherGPT Risk Engine.
+
+The project's current heat impact categories are:
+
+Below 30 degrees Celsius:
+low heat impact.
+
+30 to below 35 degrees Celsius:
+moderate heat impact.
+
+35 to below 40 degrees Celsius:
+high heat impact.
+
+40 degrees Celsius or above:
+extreme heat impact.
+
+These thresholds are project-defined heuristics used by the
+WeatherGPT Risk Engine. They are not official medical or
+meteorological safety thresholds.
+
+RAIN
+
+Precipitation probability is evaluated by the WeatherGPT Risk Engine.
+
+The project's current rain impact categories are:
+
+Below 30 percent:
+minimal rain impact.
+
+30 to below 50 percent:
+low rain impact.
+
+50 to below 80 percent:
+moderate rain impact.
+
+80 percent or above:
+high rain impact.
+
+These thresholds are project-defined heuristics.
+
+WIND
+
+Wind speed is evaluated by the WeatherGPT Risk Engine.
+
+The project's current wind impact categories are:
+
+Below 15 km/h:
+low wind impact.
+
+15 to below 30 km/h:
+moderate wind impact.
+
+30 to below 50 km/h:
+high wind impact.
+
+50 km/h or above:
+extreme wind impact.
+
+These thresholds are project-defined heuristics.
+
+HUMIDITY
+
+Humidity is evaluated when humidity data is available.
+
+The project's current humidity impact categories are:
+
+Below 60 percent:
+low humidity impact.
+
+60 to below 80 percent:
+moderate humidity impact.
+
+80 percent or above:
+high humidity impact.
+
+These thresholds are project-defined heuristics.
+
+WHAT-IF ANALYSIS
+
+WeatherGPT supports hypothetical weather scenarios.
+
+Examples include:
+
+"What if the temperature reaches 40 degrees?"
+
+"What if there is an 80 percent chance of rain?"
+
+"What if wind speed reaches 50 km/h?"
+
+"What if humidity reaches 90 percent?"
+
+The What-If Engine calculates the hypothetical weather risk using the
+same deterministic Risk Engine.
+
+The Decision Engine then determines the activity-specific decision.
+
+The language model must explain the calculated hypothetical result
+without changing it.
+
+FORECAST CONFIDENCE
+
+WeatherGPT may provide a forecast confidence value.
+
+Forecast confidence is a project-defined heuristic based on forecast
+horizon and available uncertainty information.
+
+It should be presented as a WeatherGPT confidence estimate and not
+as an official probability of forecast correctness.
+
+IMPORTANT LIMITATIONS
+
+WeatherGPT's Risk Engine thresholds are software heuristics created
+for the project.
+
+They are not official government warnings, medical advice,
+meteorological warnings, or emergency instructions.
+
+For severe weather or emergency situations, users should consult
+official local weather warnings and relevant local authorities.
+
+RAG ROLE
+
+RAG provides supporting domain knowledge.
+
+RAG does not calculate weather risk.
+
+RAG does not replace the Risk Engine.
+
+RAG does not replace the Decision Engine.
+
+RAG does not modify numerical weather data.
+
+RAG does not override an authoritative calculated decision.
+
+The final response should prioritize verified weather data and
+calculated Risk Engine and Decision Engine results.

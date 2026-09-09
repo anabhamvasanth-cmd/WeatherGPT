@@ -127,7 +127,9 @@ class WeatherClient:
                     "temperature_2m_min,"
                     "precipitation_sum,"
                     "precipitation_probability_max,"
-                    "wind_speed_10m_max"
+                    "wind_speed_10m_max,"
+                    "relative_humidity_2m_mean,"
+                    "relative_humidity_2m_max"
                 ),
                 "timezone": "auto",
             },
@@ -149,6 +151,14 @@ class WeatherClient:
             [],
         )
         wind = daily.get("wind_speed_10m_max", [])
+        humidity_mean = daily.get(
+            "relative_humidity_2m_mean",
+            [],
+        )
+        humidity_max = daily.get(
+            "relative_humidity_2m_max",
+            [],
+        )
 
         end_day = start_day + days
 
@@ -161,6 +171,8 @@ class WeatherClient:
             start_day:end_day
         ]
         wind = wind[start_day:end_day]
+        humidity_mean = humidity_mean[start_day:end_day]
+        humidity_max = humidity_max[start_day:end_day]
 
         forecast_data = []
 
@@ -177,6 +189,8 @@ class WeatherClient:
                     "rain_probability": precipitation_probability[i],
                     "precipitation": precipitation[i],
                     "wind_speed": wind[i],
+                    "humidity_mean": humidity_mean[i],
+                    "humidity_max": humidity_max[i],
                 }
             )
 
@@ -211,7 +225,9 @@ class WeatherClient:
                 f"Low {day['temperature_low']} °C, "
                 f"Rain {day['rain_probability']}%, "
                 f"Precipitation {day['precipitation']} mm, "
-                f"Max wind {day['wind_speed']} km/h"
+                f"Max wind {day['wind_speed']} km/h, "
+                f"Mean humidity {day['humidity_mean']}%, "
+                f"Max humidity {day['humidity_max']}%"
             )
 
         return "\n".join(forecast_lines)

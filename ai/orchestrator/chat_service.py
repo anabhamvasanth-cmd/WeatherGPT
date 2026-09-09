@@ -5,10 +5,12 @@ from ai.forecast.confidence import ForecastConfidence
 from ai.risk.risk_engine import RiskEngine
 from ai.risk.what_if import WeatherWhatIf
 from ai.decision.decision_engine import DecisionEngine
+from ai.rag.retriever import WeatherRAG
+from ai.language.language_detector import LanguageDetector
 
 
 class ChatService:
-    """Coordinate weather queries, forecasting, risk, and decisions."""
+    """Coordinate weather queries, forecasting, risk, decisions, and RAG."""
 
     def __init__(self):
         self.query_parser = QueryParser()
@@ -18,9 +20,15 @@ class ChatService:
         self.risk_engine = RiskEngine()
         self.what_if_engine = WeatherWhatIf()
         self.decision_engine = DecisionEngine()
+        self.rag = WeatherRAG()
+        self.language_detector = LanguageDetector()
 
     def process(self, user_question: str) -> str:
         """Process a weather question."""
+
+        language = self.language_detector.detect_language(
+            user_question
+        )
 
         query = self.query_parser.parse(user_question)
 
@@ -60,6 +68,12 @@ class ChatService:
                 query.location
             )
 
+        rag_context = self._get_rag_context(
+            user_question=user_question,
+            activity=query.activity,
+            weather_context=weather_context,
+        )
+
         enriched_context = f"""
 Location: {query.location}
 Intent: {query.intent}
@@ -67,12 +81,46 @@ Forecast days: {query.forecast_days}
 Start day: {query.start_day}
 Activity: {query.activity}
 
+Response language:
+{language['name']} ({language['code']})
+
+Verified weather and decision information:
 {weather_context}
+
+Retrieved domain knowledge:
+{rag_context}
 """
 
         return self.response_generator.generate_response(
             user_question=user_question,
             weather_context=enriched_context,
+        )
+
+    def _get_rag_context(
+        self,
+        user_question: str,
+        activity: str,
+        weather_context: str,
+    ) -> str:
+        """Retrieve relevant domain knowledge for the query."""
+
+        retrieval_query = (
+            f"{user_question} "
+            f"Activity: {activity}. "
+            f"Weather decision context: {weather_context}"
+        )
+
+        results = self.rag.search(
+            retrieval_query,
+            top_k=3,
+        )
+
+        if not results:
+            return "No additional domain knowledge retrieved."
+
+        return "\n\n".join(
+            f"- {result}"
+            for result in results
         )
 
     def _get_forecast_context(
