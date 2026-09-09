@@ -10,75 +10,180 @@ from ai.language.language_detector import LanguageDetector
 
 
 class ChatService:
-    """Coordinate weather queries, forecasting, risk, decisions, and RAG."""
+    """
+    Main WeatherGPT AI orchestration layer.
+
+    Pipeline:
+
+        User Question
+            ↓
+        Language Detection
+            ↓
+        Query Parsing
+            ↓
+        Weather Retrieval
+            ↓
+        Risk / Forecast / What-If
+            ↓
+        Decision Engine
+            ↓
+        Activity-aware RAG
+            ↓
+        Gemini explanation
+    """
 
     def __init__(self):
         self.query_parser = QueryParser()
+
         self.weather_client = WeatherClient()
-        self.response_generator = WeatherResponseGenerator()
-        self.forecast_confidence = ForecastConfidence()
+
+        self.response_generator = (
+            WeatherResponseGenerator()
+        )
+
+        self.forecast_confidence = (
+            ForecastConfidence()
+        )
+
         self.risk_engine = RiskEngine()
+
         self.what_if_engine = WeatherWhatIf()
+
         self.decision_engine = DecisionEngine()
+
         self.rag = WeatherRAG()
-        self.language_detector = LanguageDetector()
 
-    def process(self, user_question: str) -> str:
-        """Process a weather question."""
+        self.language_detector = (
+            LanguageDetector()
+        )
 
-        language = self.language_detector.detect_language(
+    # ==========================================================
+    # MAIN PROCESSING
+    # ==========================================================
+
+    def process(
+        self,
+        user_question: str,
+    ) -> str:
+        """
+        Process a complete WeatherGPT question.
+        """
+
+        if not user_question or not user_question.strip():
+            return (
+                "Please enter a weather question."
+            )
+
+        # ------------------------------------------------------
+        # 1. LANGUAGE DETECTION
+        # ------------------------------------------------------
+
+        language = (
+            self.language_detector.detect_language(
+                user_question
+            )
+        )
+
+        # ------------------------------------------------------
+        # 2. QUERY PARSING
+        # ------------------------------------------------------
+
+        query = self.query_parser.parse(
             user_question
         )
 
-        query = self.query_parser.parse(user_question)
+        # ------------------------------------------------------
+        # 3. LOCATION VALIDATION
+        # ------------------------------------------------------
 
         if not query.location:
             return (
-                "Please specify a location so I can retrieve the "
-                "weather information."
+                "Please specify a location so I can "
+                "retrieve the weather information."
             )
 
+        # ------------------------------------------------------
+        # 4. INTENT PROCESSING
+        # ------------------------------------------------------
+
         if query.intent == "what_if":
-            weather_context = self._get_what_if_context(
-                location=query.location,
-                activity=query.activity,
-                temperature=query.hypothetical_temperature,
-                rain_probability=query.hypothetical_rain_probability,
-                wind_speed=query.hypothetical_wind_speed,
-                humidity=query.hypothetical_humidity,
+
+            weather_context = (
+                self._get_what_if_context(
+                    location=query.location,
+                    activity=query.activity,
+                    temperature=(
+                        query.hypothetical_temperature
+                    ),
+                    rain_probability=(
+                        query.hypothetical_rain_probability
+                    ),
+                    wind_speed=(
+                        query.hypothetical_wind_speed
+                    ),
+                    humidity=(
+                        query.hypothetical_humidity
+                    ),
+                )
             )
 
         elif query.intent == "risk":
-            weather_context = self._get_risk_context(
-                query.location,
-                query.forecast_days,
-                query.start_day,
-                query.activity,
+
+            weather_context = (
+                self._get_risk_context(
+                    location=query.location,
+                    forecast_days=(
+                        query.forecast_days
+                    ),
+                    start_day=query.start_day,
+                    activity=query.activity,
+                )
             )
 
         elif query.intent == "forecast":
-            weather_context = self._get_forecast_context(
-                query.location,
-                query.forecast_days,
-                query.start_day,
+
+            weather_context = (
+                self._get_forecast_context(
+                    location=query.location,
+                    forecast_days=(
+                        query.forecast_days
+                    ),
+                    start_day=query.start_day,
+                )
             )
 
         else:
-            weather_context = self.weather_client.get_current_weather(
-                query.location
+
+            weather_context = (
+                self.weather_client
+                .get_current_weather(
+                    query.location
+                )
             )
+
+        # ------------------------------------------------------
+        # 5. RAG
+        # ------------------------------------------------------
 
         rag_context = self._get_rag_context(
             user_question=user_question,
             activity=query.activity,
-            weather_context=weather_context,
+            intent=query.intent,
         )
+
+        # ------------------------------------------------------
+        # 6. BUILD TRUSTED CONTEXT
+        # ------------------------------------------------------
 
         enriched_context = f"""
 Location: {query.location}
+
 Intent: {query.intent}
+
 Forecast days: {query.forecast_days}
+
 Start day: {query.start_day}
+
 Activity: {query.activity}
 
 Response language:
@@ -91,37 +196,75 @@ Retrieved domain knowledge:
 {rag_context}
 """
 
-        return self.response_generator.generate_response(
-            user_question=user_question,
-            weather_context=enriched_context,
+        # ------------------------------------------------------
+        # 7. LLM EXPLANATION
+        # ------------------------------------------------------
+
+        return (
+            self.response_generator.generate_response(
+                user_question=user_question,
+                weather_context=enriched_context,
+            )
         )
+
+    # ==========================================================
+    # RAG
+    # ==========================================================
 
     def _get_rag_context(
         self,
         user_question: str,
         activity: str,
-        weather_context: str,
+        intent: str,
     ) -> str:
-        """Retrieve relevant domain knowledge for the query."""
+        """
+        Retrieve supporting domain knowledge.
+
+        RAG receives the user's question together with
+        activity and intent.
+
+        It does not receive the calculated weather values
+        as part of the retrieval query.
+        """
 
         retrieval_query = (
-            f"{user_question} "
-            f"Activity: {activity}. "
-            f"Weather decision context: {weather_context}"
+            f"User weather question: "
+            f"{user_question}\n"
+            f"Activity: {activity}\n"
+            f"Intent: {intent}\n"
+            f"Relevant weather risks, impacts, "
+            f"recommendations, activity guidance, "
+            f"and decision support."
         )
 
-        results = self.rag.search(
-            retrieval_query,
+        results = self.rag.search_with_scores(
+            query=retrieval_query,
             top_k=3,
         )
 
         if not results:
-            return "No additional domain knowledge retrieved."
+            return (
+                "No sufficiently relevant domain "
+                "knowledge was retrieved."
+            )
 
-        return "\n\n".join(
-            f"- {result}"
-            for result in results
-        )
+        lines = []
+
+        for document, score in results:
+
+            lines.append(
+                f"[Relevance: {score:.3f}]"
+            )
+
+            lines.append(
+                document
+            )
+
+        return "\n\n".join(lines)
+
+    # ==========================================================
+    # FORECAST
+    # ==========================================================
 
     def _get_forecast_context(
         self,
@@ -129,19 +272,28 @@ Retrieved domain knowledge:
         forecast_days: int,
         start_day: int,
     ) -> str:
-        """Retrieve structured forecast information with confidence."""
+        """
+        Retrieve forecast information and confidence.
+        """
 
-        forecast_data = self.weather_client.get_forecast_data(
-            location=location,
-            days=forecast_days,
-            start_day=start_day,
+        forecast_data = (
+            self.weather_client
+            .get_forecast_data(
+                location=location,
+                days=forecast_days,
+                start_day=start_day,
+            )
         )
 
         if not forecast_data:
-            return "No forecast data available."
+            return (
+                "No forecast data available."
+            )
 
-        confidence = self.forecast_confidence.calculate(
-            forecast_days=forecast_days,
+        confidence = (
+            self.forecast_confidence.calculate(
+                forecast_days=forecast_days,
+            )
         )
 
         lines = [
@@ -149,21 +301,36 @@ Retrieved domain knowledge:
         ]
 
         for day in forecast_data:
+
             lines.append(
                 f"{day['date']}: "
                 f"{day['condition']}, "
-                f"High {day['temperature_high']} °C, "
-                f"Low {day['temperature_low']} °C, "
-                f"Rain {day['rain_probability']}%, "
-                f"Precipitation {day['precipitation']} mm, "
-                f"Max wind {day['wind_speed']} km/h"
+                f"High "
+                f"{day['temperature_high']} °C, "
+                f"Low "
+                f"{day['temperature_low']} °C, "
+                f"Rain "
+                f"{day['rain_probability']}%, "
+                f"Precipitation "
+                f"{day['precipitation']} mm, "
+                f"Max wind "
+                f"{day['wind_speed']} km/h, "
+                f"Mean humidity "
+                f"{day['humidity_mean']}%, "
+                f"Max humidity "
+                f"{day['humidity_max']}%"
             )
 
         lines.append(
-            f"Forecast confidence: {confidence:.2f}"
+            f"Forecast confidence: "
+            f"{confidence:.2f}"
         )
 
         return "\n".join(lines)
+
+    # ==========================================================
+    # RISK
+    # ==========================================================
 
     def _get_risk_context(
         self,
@@ -172,102 +339,210 @@ Retrieved domain knowledge:
         start_day: int,
         activity: str,
     ) -> str:
-        """Retrieve forecast, calculate risk, and generate a decision."""
+        """
+        Calculate weather risk and activity-specific decision.
 
-        forecast_data = self.weather_client.get_forecast_data(
-            location=location,
-            days=forecast_days,
-            start_day=start_day,
+        The Risk Engine and Decision Engine are authoritative.
+        """
+
+        forecast_data = (
+            self.weather_client
+            .get_forecast_data(
+                location=location,
+                days=forecast_days,
+                start_day=start_day,
+            )
         )
 
         if not forecast_data:
-            return "No forecast data available."
+            return (
+                "No forecast data available."
+            )
 
-        confidence = self.forecast_confidence.calculate(
-            forecast_days=forecast_days,
+        confidence = (
+            self.forecast_confidence.calculate(
+                forecast_days=forecast_days,
+            )
         )
 
         lines = [
             f"Forecast for {location}:"
         ]
 
+        # ------------------------------------------------------
+        # Forecast information
+        # ------------------------------------------------------
+
         for day in forecast_data:
+
             lines.append(
                 f"{day['date']}: "
                 f"{day['condition']}, "
-                f"High {day['temperature_high']} °C, "
-                f"Low {day['temperature_low']} °C, "
-                f"Rain {day['rain_probability']}%, "
-                f"Precipitation {day['precipitation']} mm, "
-                f"Max wind {day['wind_speed']} km/h"
+                f"High "
+                f"{day['temperature_high']} °C, "
+                f"Low "
+                f"{day['temperature_low']} °C, "
+                f"Rain "
+                f"{day['rain_probability']}%, "
+                f"Precipitation "
+                f"{day['precipitation']} mm, "
+                f"Max wind "
+                f"{day['wind_speed']} km/h, "
+                f"Mean humidity "
+                f"{day['humidity_mean']}%, "
+                f"Max humidity "
+                f"{day['humidity_max']}%"
             )
 
-        day = forecast_data[0]
+        # ------------------------------------------------------
+        # Select requested forecast day
+        # ------------------------------------------------------
+
+        selected_day = forecast_data[0]
+
+        # ------------------------------------------------------
+        # Risk calculation
+        # ------------------------------------------------------
 
         risk = self.risk_engine.assess(
-            temperature=day["temperature_high"],
-            precipitation_probability=day["rain_probability"],
-            wind_speed=day["wind_speed"],
+            temperature=(
+                selected_day[
+                    "temperature_high"
+                ]
+            ),
+            precipitation_probability=(
+                selected_day[
+                    "rain_probability"
+                ]
+            ),
+            wind_speed=(
+                selected_day[
+                    "wind_speed"
+                ]
+            ),
+            humidity=(
+                selected_day[
+                    "humidity_mean"
+                ]
+            ),
         )
 
-        decision = self.decision_engine.evaluate(
-            risk_assessment=risk,
-            activity=activity,
+        # ------------------------------------------------------
+        # Activity decision
+        # ------------------------------------------------------
+
+        decision = (
+            self.decision_engine.evaluate(
+                risk_assessment=risk,
+                activity=activity,
+            )
+        )
+
+        # ------------------------------------------------------
+        # Forecast confidence
+        # ------------------------------------------------------
+
+        lines.append(
+            f"Forecast confidence: "
+            f"{confidence:.2f}"
+        )
+
+        # ------------------------------------------------------
+        # Risk assessment
+        # ------------------------------------------------------
+
+        lines.append(
+            "Risk assessment:"
         )
 
         lines.append(
-            f"Forecast confidence: {confidence:.2f}"
-        )
-
-        lines.append("Risk assessment:")
-
-        lines.append(
-            f"Overall risk: {risk['overall_risk']}"
+            f"Overall risk: "
+            f"{risk['overall_risk']}"
         )
 
         lines.append(
-            f"Risk score: {risk['score']}"
+            f"Risk score: "
+            f"{risk['score']}"
         )
 
         lines.append(
-            f"Heat impact: {risk['impacts'].get('heat', 'unknown')}"
+            "Heat impact: "
+            f"{risk['impacts'].get(
+                'heat',
+                'unknown'
+            )}"
         )
 
         lines.append(
-            f"Rain impact: {risk['impacts'].get('rain', 'unknown')}"
+            "Rain impact: "
+            f"{risk['impacts'].get(
+                'rain',
+                'unknown'
+            )}"
         )
 
         lines.append(
-            f"Wind impact: {risk['impacts'].get('wind', 'unknown')}"
+            "Wind impact: "
+            f"{risk['impacts'].get(
+                'wind',
+                'unknown'
+            )}"
         )
 
         lines.append(
-            f"Humidity impact: {risk['impacts'].get('humidity', 'unknown')}"
+            "Humidity impact: "
+            f"{risk['impacts'].get(
+                'humidity',
+                'unknown'
+            )}"
         )
 
-        lines.append("Decision:")
-
-        lines.append(
-            f"Activity: {decision['activity']}"
-        )
-
-        lines.append(
-            f"Decision: {decision['decision']}"
-        )
+        # ------------------------------------------------------
+        # Decision
+        # ------------------------------------------------------
 
         lines.append(
-            f"Recommendation: {decision['recommendation']}"
+            "Decision:"
         )
+
+        lines.append(
+            f"Activity: "
+            f"{decision['activity']}"
+        )
+
+        lines.append(
+            f"Decision: "
+            f"{decision['decision']}"
+        )
+
+        lines.append(
+            f"Recommendation: "
+            f"{decision['recommendation']}"
+        )
+
+        # ------------------------------------------------------
+        # Risk recommendations
+        # ------------------------------------------------------
 
         if risk["recommendations"]:
-            lines.append("Risk recommendations:")
 
-            for recommendation in risk["recommendations"]:
+            lines.append(
+                "Risk recommendations:"
+            )
+
+            for recommendation in (
+                risk["recommendations"]
+            ):
+
                 lines.append(
                     f"- {recommendation}"
                 )
 
         return "\n".join(lines)
+
+    # ==========================================================
+    # WHAT-IF
+    # ==========================================================
 
     def _get_what_if_context(
         self,
@@ -278,7 +553,11 @@ Retrieved domain knowledge:
         wind_speed: float | None = None,
         humidity: float | None = None,
     ) -> str:
-        """Calculate risk for a hypothetical weather scenario."""
+        """
+        Calculate risk for a hypothetical scenario.
+
+        Hypothetical values are explicitly labelled.
+        """
 
         supplied_values = [
             temperature,
@@ -287,97 +566,162 @@ Retrieved domain knowledge:
             humidity,
         ]
 
-        if all(value is None for value in supplied_values):
+        if all(
+            value is None
+            for value in supplied_values
+        ):
             return (
-                "No hypothetical weather values were detected. "
-                "Please specify a hypothetical temperature, rain "
+                "No hypothetical weather values "
+                "were detected. Please specify a "
+                "hypothetical temperature, rain "
                 "probability, wind speed, or humidity."
             )
 
-        scenario = self.what_if_engine.analyze(
-            temperature=temperature,
-            precipitation_probability=rain_probability,
-            wind_speed=wind_speed,
-            humidity=humidity,
+        scenario = (
+            self.what_if_engine.analyze(
+                temperature=temperature,
+                precipitation_probability=(
+                    rain_probability
+                ),
+                wind_speed=wind_speed,
+                humidity=humidity,
+            )
         )
 
-        risk = scenario["risk_assessment"]
+        risk = scenario[
+            "risk_assessment"
+        ]
 
-        decision = self.decision_engine.evaluate(
-            risk_assessment=risk,
-            activity=activity,
+        decision = (
+            self.decision_engine.evaluate(
+                risk_assessment=risk,
+                activity=activity,
+            )
         )
 
         lines = [
-            "Hypothetical weather scenario:",
+            "Hypothetical weather scenario:"
         ]
 
+        # ------------------------------------------------------
+        # Hypothetical inputs
+        # ------------------------------------------------------
+
         if temperature is not None:
+
             lines.append(
-                f"Hypothetical temperature: {temperature} °C"
+                "Hypothetical temperature: "
+                f"{temperature} °C"
             )
 
         if rain_probability is not None:
+
             lines.append(
-                f"Hypothetical rain probability: "
+                "Hypothetical rain probability: "
                 f"{rain_probability}%"
             )
 
         if wind_speed is not None:
+
             lines.append(
-                f"Hypothetical wind speed: {wind_speed} km/h"
+                "Hypothetical wind speed: "
+                f"{wind_speed} km/h"
             )
 
         if humidity is not None:
+
             lines.append(
-                f"Hypothetical humidity: {humidity}%"
+                "Hypothetical humidity: "
+                f"{humidity}%"
             )
 
-        lines.append("Risk assessment:")
+        # ------------------------------------------------------
+        # Risk
+        # ------------------------------------------------------
 
         lines.append(
-            f"Overall risk: {risk['overall_risk']}"
+            "Risk assessment:"
         )
 
         lines.append(
-            f"Risk score: {risk['score']}"
+            f"Overall risk: "
+            f"{risk['overall_risk']}"
         )
 
         lines.append(
-            f"Heat impact: {risk['impacts'].get('heat', 'unknown')}"
+            f"Risk score: "
+            f"{risk['score']}"
         )
 
         lines.append(
-            f"Rain impact: {risk['impacts'].get('rain', 'unknown')}"
+            "Heat impact: "
+            f"{risk['impacts'].get(
+                'heat',
+                'unknown'
+            )}"
         )
 
         lines.append(
-            f"Wind impact: {risk['impacts'].get('wind', 'unknown')}"
+            "Rain impact: "
+            f"{risk['impacts'].get(
+                'rain',
+                'unknown'
+            )}"
         )
 
         lines.append(
-            f"Humidity impact: "
-            f"{risk['impacts'].get('humidity', 'unknown')}"
-        )
-
-        lines.append("Decision:")
-
-        lines.append(
-            f"Activity: {decision['activity']}"
+            "Wind impact: "
+            f"{risk['impacts'].get(
+                'wind',
+                'unknown'
+            )}"
         )
 
         lines.append(
-            f"Decision: {decision['decision']}"
+            "Humidity impact: "
+            f"{risk['impacts'].get(
+                'humidity',
+                'unknown'
+            )}"
+        )
+
+        # ------------------------------------------------------
+        # Decision
+        # ------------------------------------------------------
+
+        lines.append(
+            "Decision:"
         )
 
         lines.append(
-            f"Recommendation: {decision['recommendation']}"
+            f"Activity: "
+            f"{decision['activity']}"
         )
+
+        lines.append(
+            f"Decision: "
+            f"{decision['decision']}"
+        )
+
+        lines.append(
+            f"Recommendation: "
+            f"{decision['recommendation']}"
+        )
+
+        # ------------------------------------------------------
+        # Recommendations
+        # ------------------------------------------------------
 
         if risk["recommendations"]:
-            lines.append("Risk recommendations:")
 
-            for recommendation in risk["recommendations"]:
+            lines.append(
+                "Risk recommendations:"
+            )
+
+            for recommendation in (
+                risk["recommendations"]
+            ):
+
                 lines.append(
                     f"- {recommendation}"
                 )

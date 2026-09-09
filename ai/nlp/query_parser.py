@@ -22,12 +22,18 @@ class WeatherQuery:
         self.forecast_days = forecast_days
         self.start_day = start_day
         self.activity = activity
-        self.hypothetical_temperature = hypothetical_temperature
+        self.hypothetical_temperature = (
+            hypothetical_temperature
+        )
         self.hypothetical_rain_probability = (
             hypothetical_rain_probability
         )
-        self.hypothetical_wind_speed = hypothetical_wind_speed
-        self.hypothetical_humidity = hypothetical_humidity
+        self.hypothetical_wind_speed = (
+            hypothetical_wind_speed
+        )
+        self.hypothetical_humidity = (
+            hypothetical_humidity
+        )
 
     def __repr__(self) -> str:
         return (
@@ -167,28 +173,88 @@ class QueryParser:
         ],
     }
 
-    def parse(self, question: str) -> WeatherQuery:
+    # Words that should never remain attached to a location.
+    LOCATION_STOP_WORDS = {
+        "today",
+        "tomorrow",
+        "tonight",
+        "morning",
+        "afternoon",
+        "evening",
+        "night",
+        "later",
+        "upcoming",
+        "now",
+        "this",
+        "next",
+        "week",
+        "weeks",
+        "day",
+        "days",
+        "forecast",
+        "weather",
+        "temperature",
+        "rain",
+        "raining",
+        "wind",
+        "windy",
+        "humidity",
+        "humid",
+        "risk",
+        "safe",
+        "safety",
+        "running",
+        "run",
+        "walking",
+        "walk",
+        "cycling",
+        "cycle",
+        "sports",
+        "sport",
+        "travel",
+        "farming",
+        "agriculture",
+        "outside",
+        "outdoor",
+    }
+
+    def parse(
+        self,
+        question: str,
+    ) -> WeatherQuery:
         """Parse a user's weather question."""
 
         if not question or not question.strip():
             return WeatherQuery()
 
-        normalized = question.lower().strip()
+        normalized = (
+            question.lower().strip()
+        )
 
-        is_what_if = self._is_what_if(normalized)
+        is_what_if = self._is_what_if(
+            normalized
+        )
 
         if is_what_if:
             intent = "what_if"
         else:
-            intent = self._extract_intent(normalized)
+            intent = self._extract_intent(
+                normalized
+            )
 
-        location = self._extract_location(question)
-
-        forecast_days, start_day = self._extract_forecast_period(
-            normalized
+        location = self._extract_location(
+            question
         )
 
-        activity = self._extract_activity(normalized)
+        forecast_days, start_day = (
+            self._extract_forecast_period(
+                normalized
+            )
+        )
+
+        activity = self._extract_activity(
+            normalized
+        )
 
         hypothetical_temperature = None
         hypothetical_rain_probability = None
@@ -196,20 +262,29 @@ class QueryParser:
         hypothetical_humidity = None
 
         if is_what_if:
+
             hypothetical_temperature = (
-                self._extract_temperature(normalized)
+                self._extract_temperature(
+                    normalized
+                )
             )
 
             hypothetical_rain_probability = (
-                self._extract_rain_probability(normalized)
+                self._extract_rain_probability(
+                    normalized
+                )
             )
 
             hypothetical_wind_speed = (
-                self._extract_wind_speed(normalized)
+                self._extract_wind_speed(
+                    normalized
+                )
             )
 
             hypothetical_humidity = (
-                self._extract_humidity(normalized)
+                self._extract_humidity(
+                    normalized
+                )
             )
 
         return WeatherQuery(
@@ -218,15 +293,28 @@ class QueryParser:
             forecast_days=forecast_days,
             start_day=start_day,
             activity=activity,
-            hypothetical_temperature=hypothetical_temperature,
+            hypothetical_temperature=(
+                hypothetical_temperature
+            ),
             hypothetical_rain_probability=(
                 hypothetical_rain_probability
             ),
-            hypothetical_wind_speed=hypothetical_wind_speed,
-            hypothetical_humidity=hypothetical_humidity,
+            hypothetical_wind_speed=(
+                hypothetical_wind_speed
+            ),
+            hypothetical_humidity=(
+                hypothetical_humidity
+            ),
         )
 
-    def _is_what_if(self, question: str) -> bool:
+    # ==========================================================
+    # INTENT
+    # ==========================================================
+
+    def _is_what_if(
+        self,
+        question: str,
+    ) -> bool:
         """Detect hypothetical weather questions."""
 
         hypothetical_phrases = [
@@ -250,10 +338,15 @@ class QueryParser:
             for phrase in hypothetical_phrases
         )
 
-    def _extract_intent(self, question: str) -> str:
+    def _extract_intent(
+        self,
+        question: str,
+    ) -> str:
         """Determine the user's weather-related intent."""
 
-        risk_keywords = self.INTENT_KEYWORDS["risk"]
+        risk_keywords = (
+            self.INTENT_KEYWORDS["risk"]
+        )
 
         if any(
             keyword in question
@@ -261,7 +354,9 @@ class QueryParser:
         ):
             return "risk"
 
-        forecast_keywords = self.INTENT_KEYWORDS["forecast"]
+        forecast_keywords = (
+            self.INTENT_KEYWORDS["forecast"]
+        )
 
         if any(
             keyword in question
@@ -276,7 +371,11 @@ class QueryParser:
             "humidity",
             "general",
         ]:
-            keywords = self.INTENT_KEYWORDS[candidate_intent]
+            keywords = (
+                self.INTENT_KEYWORDS[
+                    candidate_intent
+                ]
+            )
 
             if any(
                 keyword in question
@@ -286,8 +385,15 @@ class QueryParser:
 
         return "general"
 
-    def _extract_activity(self, question: str) -> str:
-        """Determine the activity mentioned in the question."""
+    # ==========================================================
+    # ACTIVITY
+    # ==========================================================
+
+    def _extract_activity(
+        self,
+        question: str,
+    ) -> str:
+        """Determine the activity mentioned."""
 
         activity_priority = [
             "running",
@@ -301,7 +407,12 @@ class QueryParser:
         ]
 
         for activity in activity_priority:
-            keywords = self.ACTIVITY_KEYWORDS[activity]
+
+            keywords = (
+                self.ACTIVITY_KEYWORDS[
+                    activity
+                ]
+            )
 
             if any(
                 keyword in question
@@ -311,32 +422,98 @@ class QueryParser:
 
         return "outdoor"
 
+    # ==========================================================
+    # LOCATION
+    # ==========================================================
+
     def _extract_location(
         self,
         question: str,
     ) -> Optional[str]:
-        """Extract a location from common natural-language patterns."""
+        """
+        Extract a location from common natural-language patterns.
+
+        Temporal and weather terms are removed from the captured
+        location so phrases such as:
+
+            "Guntur tomorrow"
+
+        become:
+
+            "Guntur"
+        """
 
         patterns = [
-            r"\bin\s+([A-Za-z][A-Za-z\s,.-]+?)(?:\?|$)",
-            r"\bat\s+([A-Za-z][A-Za-z\s,.-]+?)(?:\?|$)",
-            r"\bfor\s+([A-Za-z][A-Za-z\s,.-]+?)(?:\?|$)",
+            r"\bin\s+([A-Za-z][A-Za-z\s,.-]*?)(?=\?|$)",
+            r"\bat\s+([A-Za-z][A-Za-z\s,.-]*?)(?=\?|$)",
+            r"\bfor\s+([A-Za-z][A-Za-z\s,.-]*?)(?=\?|$)",
         ]
 
         for pattern in patterns:
+
             match = re.search(
                 pattern,
                 question,
                 re.IGNORECASE,
             )
 
-            if match:
-                location = match.group(1).strip(" .,")
+            if not match:
+                continue
 
-                if location:
-                    return location
+            location = match.group(1).strip(
+                " .,?"
+            )
+
+            location = (
+                self._clean_location(
+                    location
+                )
+            )
+
+            if location:
+                return location
 
         return None
+
+    def _clean_location(
+        self,
+        location: str,
+    ) -> str:
+        """Remove temporal/weather words accidentally captured as location."""
+
+        words = location.split()
+
+        cleaned_words = []
+
+        for word in words:
+
+            normalized_word = (
+                word.lower().strip(
+                    " .,?"
+                )
+            )
+
+            if (
+                normalized_word
+                in self.LOCATION_STOP_WORDS
+            ):
+                break
+
+            cleaned_words.append(
+                word
+            )
+
+        cleaned_location = " ".join(
+            cleaned_words
+        ).strip(
+            " .,?"
+        )
+
+        return cleaned_location
+
+    # ==========================================================
+    # FORECAST PERIOD
+    # ==========================================================
 
     def _extract_forecast_period(
         self,
@@ -362,7 +539,10 @@ class QueryParser:
         )
 
         if match:
-            days = int(match.group(1))
+
+            days = int(
+                match.group(1)
+            )
 
             days = max(
                 1,
@@ -373,6 +553,10 @@ class QueryParser:
 
         return 1, 0
 
+    # ==========================================================
+    # TEMPERATURE
+    # ==========================================================
+
     def _extract_temperature(
         self,
         question: str,
@@ -380,15 +564,21 @@ class QueryParser:
         """Extract hypothetical temperature."""
 
         patterns = [
-            r"(?:temperature|temp)"
-            r"(?:\s+is|\s+reaches|\s+reached|\s+of|\s+at)?"
-            r"\s*(-?\d+(?:\.\d+)?)\s*"
-            r"(?:°\s*c|degrees?\s*c|c|degrees?)?",
-
-            r"(-?\d+(?:\.\d+)?)\s*°\s*c",
+            (
+                r"(?:temperature|temp)"
+                r"(?:\s+is|\s+reaches|\s+reached"
+                r"|\s+of|\s+at)?"
+                r"\s*(-?\d+(?:\.\d+)?)\s*"
+                r"(?:°\s*c|degrees?\s*c|c|degrees?)?"
+            ),
+            (
+                r"(-?\d+(?:\.\d+)?)"
+                r"\s*°\s*c"
+            ),
         ]
 
         for pattern in patterns:
+
             match = re.search(
                 pattern,
                 question,
@@ -396,9 +586,15 @@ class QueryParser:
             )
 
             if match:
-                return float(match.group(1))
+                return float(
+                    match.group(1)
+                )
 
         return None
+
+    # ==========================================================
+    # RAIN
+    # ==========================================================
 
     def _extract_rain_probability(
         self,
@@ -407,20 +603,27 @@ class QueryParser:
         """Extract hypothetical rain probability."""
 
         patterns = [
-            r"(\d+(?:\.\d+)?)\s*%"
-            r"(?:\s+chance)?\s*(?:of\s+)?rain",
-
-            r"(\d+(?:\.\d+)?)\s*percent"
-            r"(?:\s+chance)?\s*(?:of\s+)?rain",
-
-            r"(?:chance|probability)"
-            r"(?:\s+of)?\s+rain"
-            r"(?:\s+is|\s+of)?\s*"
-            r"(\d+(?:\.\d+)?)\s*"
-            r"(?:%|percent)?",
+            (
+                r"(\d+(?:\.\d+)?)\s*%"
+                r"(?:\s+chance)?\s*"
+                r"(?:of\s+)?rain"
+            ),
+            (
+                r"(\d+(?:\.\d+)?)\s*percent"
+                r"(?:\s+chance)?\s*"
+                r"(?:of\s+)?rain"
+            ),
+            (
+                r"(?:chance|probability)"
+                r"(?:\s+of)?\s+rain"
+                r"(?:\s+is|\s+of)?\s*"
+                r"(\d+(?:\.\d+)?)\s*"
+                r"(?:%|percent)?"
+            ),
         ]
 
         for pattern in patterns:
+
             match = re.search(
                 pattern,
                 question,
@@ -428,14 +631,24 @@ class QueryParser:
             )
 
             if match:
-                value = float(match.group(1))
+
+                value = float(
+                    match.group(1)
+                )
 
                 return max(
                     0.0,
-                    min(100.0, value),
+                    min(
+                        100.0,
+                        value,
+                    ),
                 )
 
         return None
+
+    # ==========================================================
+    # WIND
+    # ==========================================================
 
     def _extract_wind_speed(
         self,
@@ -444,17 +657,22 @@ class QueryParser:
         """Extract hypothetical wind speed."""
 
         patterns = [
-            r"(?:wind(?:\s+speed)?|winds?)"
-            r"(?:\s+reaches|\s+reached|\s+is|\s+of|\s+at)?"
-            r"\s*(\d+(?:\.\d+)?)\s*"
-            r"(?:km/?h|kmph|kph|mph)?",
-
-            r"(\d+(?:\.\d+)?)\s*"
-            r"(?:km/?h|kmph|kph|mph)"
-            r"\s*(?:wind|winds)",
+            (
+                r"(?:wind(?:\s+speed)?|winds?)"
+                r"(?:\s+reaches|\s+reached"
+                r"|\s+is|\s+of|\s+at)?"
+                r"\s*(\d+(?:\.\d+)?)\s*"
+                r"(?:km/?h|kmph|kph|mph)?"
+            ),
+            (
+                r"(\d+(?:\.\d+)?)\s*"
+                r"(?:km/?h|kmph|kph|mph)"
+                r"\s*(?:wind|winds)"
+            ),
         ]
 
         for pattern in patterns:
+
             match = re.search(
                 pattern,
                 question,
@@ -462,9 +680,15 @@ class QueryParser:
             )
 
             if match:
-                return float(match.group(1))
+                return float(
+                    match.group(1)
+                )
 
         return None
+
+    # ==========================================================
+    # HUMIDITY
+    # ==========================================================
 
     def _extract_humidity(
         self,
@@ -473,13 +697,16 @@ class QueryParser:
         """Extract hypothetical humidity."""
 
         patterns = [
-            r"(?:humidity|humid)"
-            r"(?:\s+reaches|\s+reached|\s+is|\s+of|\s+at)?"
-            r"\s*(\d+(?:\.\d+)?)\s*%?",
-
+            (
+                r"(?:humidity|humid)"
+                r"(?:\s+reaches|\s+reached"
+                r"|\s+is|\s+of|\s+at)?"
+                r"\s*(\d+(?:\.\d+)?)\s*%?"
+            ),
         ]
 
         for pattern in patterns:
+
             match = re.search(
                 pattern,
                 question,
@@ -487,11 +714,17 @@ class QueryParser:
             )
 
             if match:
-                value = float(match.group(1))
+
+                value = float(
+                    match.group(1)
+                )
 
                 return max(
                     0.0,
-                    min(100.0, value),
+                    min(
+                        100.0,
+                        value,
+                    ),
                 )
 
         return None
