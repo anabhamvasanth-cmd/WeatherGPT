@@ -68,6 +68,12 @@ class _WeatherGPTHomeState extends State<WeatherGPTHome> {
   static const String currentEndpoint =
       '$backendBaseUrl/current';
 
+  static const String alertsEndpoint =
+      '$backendBaseUrl/alerts';
+
+  static const String bestTimeEndpoint =
+      '$backendBaseUrl/best-time';
+
   // ==========================================================================
   // LOCATION STATE
   // ==========================================================================
@@ -93,6 +99,39 @@ class _WeatherGPTHomeState extends State<WeatherGPTHome> {
   String? liveWeatherError;
 
   Map<String, dynamic>? liveWeather;
+
+  // ==========================================================================
+  // WEATHER ALERTS STATE
+  // ==========================================================================
+
+  bool alertsLoading = false;
+
+  String? alertsError;
+
+  Map<String, dynamic>? weatherAlerts;
+
+  // ==========================================================================
+  // BEST TIME STATE
+  // ==========================================================================
+
+  bool bestTimeLoading = false;
+
+  String? bestTimeError;
+
+  Map<String, dynamic>? bestTimePlan;
+
+  String selectedActivity = 'running';
+
+  final List<String> activities = [
+    'running',
+    'cycling',
+    'walking',
+    'sports',
+    'travel',
+    'farming',
+    'outdoor_work',
+    'outdoor',
+  ];
 
   // ==========================================================================
   // AI STATE
@@ -401,11 +440,19 @@ class _WeatherGPTHomeState extends State<WeatherGPTHome> {
 
         liveWeather = null;
         liveWeatherError = null;
+        alertsLoading = false;
+        alertsError = null;
+        weatherAlerts = null;
+        bestTimeLoading = false;
+        bestTimeError = null;
+        bestTimePlan = null;
         aiAnswer = '';
         aiError = null;
       });
 
       await loadLiveWeather();
+      await loadWeatherAlerts();
+      await loadBestTime();
     }
   }
 
@@ -490,6 +537,186 @@ class _WeatherGPTHomeState extends State<WeatherGPTHome> {
         liveWeatherLoading = false;
       });
     }
+  }
+
+
+  // ==========================================================================
+  // LOAD WEATHER ALERTS
+  // ==========================================================================
+
+  Future<void> loadWeatherAlerts() async {
+    if (selectedLocation.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      alertsLoading = true;
+      alertsError = null;
+    });
+
+    try {
+      final uri = Uri.parse(
+        alertsEndpoint,
+      ).replace(
+        queryParameters: {
+          'location': selectedLocation,
+          'days': '3',
+        },
+      );
+
+      final response = await http
+          .get(uri)
+          .timeout(
+            const Duration(seconds: 20),
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+
+        if (decoded is Map<String, dynamic>) {
+          setState(() {
+            weatherAlerts = decoded;
+            alertsLoading = false;
+          });
+        } else {
+          setState(() {
+            alertsError =
+                'Invalid alert data received from the backend.';
+            alertsLoading = false;
+          });
+        }
+      } else {
+        String message =
+            'Unable to load weather alerts. '
+            'HTTP ${response.statusCode}.';
+
+        try {
+          final decoded = jsonDecode(response.body);
+
+          if (decoded is Map &&
+              decoded['detail'] != null) {
+            message = decoded['detail'].toString();
+          }
+        } catch (_) {}
+
+        setState(() {
+          alertsError = message;
+          alertsLoading = false;
+        });
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        alertsError =
+            'Unable to connect to the WeatherGPT alert service.';
+        alertsLoading = false;
+      });
+    }
+  }
+
+
+  // ==========================================================================
+  // LOAD BEST TIME + BACKUP PLAN
+  // ==========================================================================
+
+  Future<void> loadBestTime() async {
+    if (selectedLocation.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      bestTimeLoading = true;
+      bestTimeError = null;
+    });
+
+    try {
+      final uri = Uri.parse(
+        bestTimeEndpoint,
+      ).replace(
+        queryParameters: {
+          'location': selectedLocation,
+          'activity': selectedActivity,
+          'days': '1',
+          'start_day': '0',
+        },
+      );
+
+      final response = await http
+          .get(uri)
+          .timeout(
+            const Duration(seconds: 20),
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+
+        if (decoded is Map<String, dynamic>) {
+          setState(() {
+            bestTimePlan = decoded;
+            bestTimeLoading = false;
+          });
+        } else {
+          setState(() {
+            bestTimeError =
+                'Invalid best-time data received from the backend.';
+            bestTimeLoading = false;
+          });
+        }
+      } else {
+        String message =
+            'Unable to load the best-time plan. '
+            'HTTP ${response.statusCode}.';
+
+        try {
+          final decoded = jsonDecode(response.body);
+
+          if (decoded is Map &&
+              decoded['detail'] != null) {
+            message = decoded['detail'].toString();
+          }
+        } catch (_) {}
+
+        setState(() {
+          bestTimeError = message;
+          bestTimeLoading = false;
+        });
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        bestTimeError =
+            'Unable to connect to the WeatherGPT best-time service.';
+        bestTimeLoading = false;
+      });
+    }
+  }
+
+  void changeActivity(String activity) {
+    if (activity == selectedActivity) {
+      return;
+    }
+
+    setState(() {
+      selectedActivity = activity;
+      bestTimePlan = null;
+      bestTimeError = null;
+    });
+
+    loadBestTime();
   }
 
   // ==========================================================================
@@ -643,6 +870,14 @@ class _WeatherGPTHomeState extends State<WeatherGPTHome> {
                   const SizedBox(height: 32),
 
                   buildLiveWeather(),
+
+                  const SizedBox(height: 18),
+
+                  buildWeatherAlerts(),
+
+                  const SizedBox(height: 18),
+
+                  buildBestTime(),
 
                   const SizedBox(height: 32),
 
@@ -868,6 +1103,861 @@ class _WeatherGPTHomeState extends State<WeatherGPTHome> {
         ),
       ],
     );
+  }
+
+
+  // ==========================================================================
+  // WEATHER ALERTS
+  // ==========================================================================
+
+  Widget buildWeatherAlerts() {
+    if (selectedLocation.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (alertsLoading) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D1B2A),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF20354A),
+          ),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
+            ),
+            SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                'Checking weather alerts...',
+                style: TextStyle(
+                  color: Color(0xFFCBD5E1),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (alertsError != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF32151B),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF7F1D1D),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFF87171),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                alertsError!,
+                style: const TextStyle(
+                  color: Color(0xFFFCA5A5),
+                  height: 1.5,
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: loadWeatherAlerts,
+              icon: const Icon(
+                Icons.refresh,
+                color: Color(0xFFFCA5A5),
+              ),
+              tooltip: 'Retry',
+            ),
+          ],
+        ),
+      );
+    }
+
+    final data = weatherAlerts;
+
+    if (data == null) {
+      return const SizedBox.shrink();
+    }
+
+    final rawAlerts = data['alerts'];
+
+    final alerts = rawAlerts is List
+        ? rawAlerts
+            .whereType<Map>()
+            .map(
+              (item) => Map<String, dynamic>.from(item),
+            )
+            .toList()
+        : <Map<String, dynamic>>[];
+
+    if (alerts.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D1B2A),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF20354A),
+          ),
+        ),
+        child: const Row(
+          children: [
+            Icon(
+              Icons.verified_outlined,
+              color: Color(0xFF4ADE80),
+              size: 25,
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'No significant weather alerts for the next 3 days.',
+                style: TextStyle(
+                  color: Color(0xFFCBD5E1),
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1B2A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF20354A),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFFBBF24),
+                size: 25,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Weather Alerts',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Text(
+                '${alerts.length}',
+                style: const TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 13,
+                ),
+              ),
+              IconButton(
+                onPressed: loadWeatherAlerts,
+                icon: const Icon(
+                  Icons.refresh,
+                  color: Color(0xFF94A3B8),
+                  size: 20,
+                ),
+                tooltip: 'Refresh alerts',
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Deterministic alerts based on forecast risk analysis',
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...alerts.map(buildAlertItem),
+        ],
+      ),
+    );
+  }
+
+  Widget buildAlertItem(
+    Map<String, dynamic> alert,
+  ) {
+    final severity =
+        (alert['severity'] ?? 'moderate')
+            .toString()
+            .toLowerCase();
+
+    Color borderColor;
+    Color backgroundColor;
+    Color iconColor;
+    IconData icon;
+
+    switch (severity) {
+      case 'critical':
+        borderColor = const Color(0xFF991B1B);
+        backgroundColor = const Color(0xFF2A1116);
+        iconColor = const Color(0xFFF87171);
+        icon = Icons.dangerous_outlined;
+        break;
+
+      case 'high':
+        borderColor = const Color(0xFF92400E);
+        backgroundColor = const Color(0xFF291A0C);
+        iconColor = const Color(0xFFFBBF24);
+        icon = Icons.warning_amber_rounded;
+        break;
+
+      default:
+        borderColor = const Color(0xFF1D4ED8);
+        backgroundColor = const Color(0xFF0D1B35);
+        iconColor = const Color(0xFF60A5FA);
+        icon = Icons.info_outline;
+    }
+
+    final date =
+        (alert['date'] ?? 'Forecast period').toString();
+
+    final title =
+        (alert['title'] ?? 'Weather Alert').toString();
+
+    final message =
+        (alert['message'] ?? '').toString();
+
+    final action =
+        (alert['action'] ?? '').toString();
+
+    final risk =
+        (alert['risk'] ?? '').toString();
+
+    final confidenceValue =
+        alert['confidence'];
+
+    String confidence = '';
+
+    if (confidenceValue != null) {
+      final number = double.tryParse(
+        confidenceValue.toString(),
+      );
+
+      if (number != null) {
+        confidence =
+            '${(number * 100).round()}% confidence';
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: borderColor,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                icon,
+                color: iconColor,
+                size: 24,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: iconColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      date,
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: iconColor.withOpacity(0.45),
+                  ),
+                ),
+                child: Text(
+                  severity.toUpperCase(),
+                  style: TextStyle(
+                    color: iconColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (message.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFFCBD5E1),
+                height: 1.5,
+                fontSize: 13,
+              ),
+            ),
+          ],
+          if (action.isNotEmpty) ...[
+            const SizedBox(height: 11),
+            Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: Color(0xFF94A3B8),
+                  size: 17,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    action,
+                    style: const TextStyle(
+                      color: Color(0xFFE2E8F0),
+                      fontSize: 13,
+                      height: 1.45,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 7,
+            children: [
+              _buildAlertMeta(
+                'Risk: ${risk.isEmpty ? 'unknown' : risk}',
+              ),
+              if (confidence.isNotEmpty)
+                _buildAlertMeta(confidence),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlertMeta(
+    String text,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFF07111F),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(
+          color: const Color(0xFF20354A),
+        ),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFF94A3B8),
+          fontSize: 10,
+        ),
+      ),
+    );
+  }
+
+
+  // ==========================================================================
+  // BEST TIME + BACKUP PLAN
+  // ==========================================================================
+
+  Widget buildBestTime() {
+    if (selectedLocation.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1B2A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF20354A),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.schedule_rounded,
+                color: Color(0xFF38BDF8),
+                size: 25,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Best Time & Backup Plan',
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: bestTimeLoading
+                    ? null
+                    : loadBestTime,
+                icon: const Icon(
+                  Icons.refresh,
+                  color: Color(0xFF94A3B8),
+                  size: 20,
+                ),
+                tooltip: 'Refresh best time',
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            'Activity-aware scheduling from hourly forecast conditions',
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildActivitySelector(),
+          const SizedBox(height: 18),
+          if (bestTimeLoading)
+            const Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Finding the best time...',
+                    style: TextStyle(
+                      color: Color(0xFFCBD5E1),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else if (bestTimeError != null)
+            _buildBestTimeError()
+          else if (bestTimePlan != null)
+            _buildBestTimeResult()
+          else
+            const Text(
+              'Select an activity to calculate the best time.',
+              style: TextStyle(
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivitySelector() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: activities.map((activity) {
+        final isSelected =
+            activity == selectedActivity;
+
+        return ChoiceChip(
+          label: Text(_activityLabel(activity)),
+          selected: isSelected,
+          onSelected: (_) {
+            changeActivity(activity);
+          },
+          selectedColor: const Color(0xFF164E63),
+          backgroundColor: const Color(0xFF07111F),
+          side: BorderSide(
+            color: isSelected
+                ? const Color(0xFF38BDF8)
+                : const Color(0xFF20354A),
+          ),
+          labelStyle: TextStyle(
+            color: isSelected
+                ? const Color(0xFF7DD3FC)
+                : const Color(0xFFCBD5E1),
+            fontSize: 12,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  String _activityLabel(String activity) {
+    switch (activity) {
+      case 'outdoor_work':
+        return 'Outdoor Work';
+      case 'outdoor':
+        return 'Outdoor';
+      default:
+        return activity[0].toUpperCase() +
+            activity.substring(1);
+    }
+  }
+
+  Widget _buildBestTimeError() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.error_outline,
+          color: Color(0xFFF87171),
+          size: 22,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            bestTimeError!,
+            style: const TextStyle(
+              color: Color(0xFFFCA5A5),
+              height: 1.5,
+            ),
+          ),
+        ),
+        IconButton(
+          onPressed: loadBestTime,
+          icon: const Icon(
+            Icons.refresh,
+            color: Color(0xFFFCA5A5),
+          ),
+          tooltip: 'Retry',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBestTimeResult() {
+    final plan = bestTimePlan!;
+
+    final status =
+        (plan['status'] ?? 'recommended').toString();
+
+    final bestTime =
+        (plan['best_time'] ?? 'No suitable time found')
+            .toString();
+
+    final date =
+        (plan['date'] ?? '').toString();
+
+    final reason =
+        (plan['reason'] ?? '').toString();
+
+    final backupTime =
+        (plan['backup_time'] ?? '').toString();
+
+    final backupPlan =
+        (plan['backup_plan'] ?? '').toString();
+
+    final risk =
+        (plan['risk'] ?? 'unknown').toString();
+
+    final confidenceValue =
+        plan['confidence'];
+
+    String confidence = '';
+
+    if (confidenceValue != null) {
+      final number = double.tryParse(
+        confidenceValue.toString(),
+      );
+
+      if (number != null) {
+        confidence =
+            '${(number * 100).round()}%';
+      }
+    }
+
+    final conditions =
+        plan['conditions'] is Map
+            ? Map<String, dynamic>.from(
+                plan['conditions'] as Map,
+              )
+            : <String, dynamic>{};
+
+    final temperature =
+        conditions['temperature'];
+
+    final rain =
+        conditions['rain_probability'];
+
+    final wind =
+        conditions['wind_speed'];
+
+    final condition =
+        (conditions['condition'] ?? '').toString();
+
+    final statusColor = status == 'recommended'
+        ? const Color(0xFF4ADE80)
+        : status == 'caution'
+            ? const Color(0xFFFBBF24)
+            : const Color(0xFFF87171);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0B2230),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: statusColor.withValues(alpha: 0.45),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    color: statusColor,
+                    size: 23,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Recommended time',
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (confidence.isNotEmpty)
+                    _buildBestTimeMeta(
+                      '$confidence confidence',
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                bestTime,
+                style: const TextStyle(
+                  fontSize: 29,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (date.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  date,
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              if (reason.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  reason,
+                  style: const TextStyle(
+                    color: Color(0xFFCBD5E1),
+                    height: 1.5,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 13),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (temperature != null)
+                    _buildBestTimeMeta(
+                      '${_formatValue(temperature)}°C',
+                    ),
+                  if (rain != null)
+                    _buildBestTimeMeta(
+                      '${_formatValue(rain)}% rain',
+                    ),
+                  if (wind != null)
+                    _buildBestTimeMeta(
+                      '${_formatValue(wind)} km/h wind',
+                    ),
+                  if (condition.isNotEmpty)
+                    _buildBestTimeMeta(condition),
+                  _buildBestTimeMeta(
+                    'Risk: $risk',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(17),
+          decoration: BoxDecoration(
+            color: const Color(0xFF101C2A),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: const Color(0xFF20354A),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.alt_route_rounded,
+                color: Color(0xFF60A5FA),
+                size: 23,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Backup Plan',
+                      style: TextStyle(
+                        color: Color(0xFF93C5FD),
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (backupTime.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Backup time: $backupTime',
+                        style: const TextStyle(
+                          color: Color(0xFFE2E8F0),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                    if (backupPlan.isNotEmpty) ...[
+                      const SizedBox(height: 7),
+                      Text(
+                        backupPlan,
+                        style: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          height: 1.5,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBestTimeMeta(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFF07111F),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(
+          color: const Color(0xFF20354A),
+        ),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFF94A3B8),
+          fontSize: 10,
+        ),
+      ),
+    );
+  }
+
+  String _formatValue(dynamic value) {
+    final number = double.tryParse(
+      value.toString(),
+    );
+
+    if (number == null) {
+      return value.toString();
+    }
+
+    if (number == number.roundToDouble()) {
+      return number.toInt().toString();
+    }
+
+    return number.toStringAsFixed(1);
   }
 
   // ==========================================================================
